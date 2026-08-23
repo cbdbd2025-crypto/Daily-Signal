@@ -1,0 +1,8 @@
+- name: Rename APK
+        run: mv extracted/ConfirmSignalApp/app/build/outputs/apk/debug/app-debug.apk extracted/ConfirmSignalApp/app/build/outputs/apk/debug/Daily-Signal.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Daily-Signal
+          path: extracted/ConfirmSignalApp/app/build/outputs/apk/debug/Daily-Signal.apk
