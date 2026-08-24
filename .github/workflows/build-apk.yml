@@ -16,7 +16,24 @@ jobs:
         run: |
           ZIPFILE=$(find . -maxdepth 1 -name "*.zip" | head -n 1)
           echo "Found zip: $ZIPFILE"
+          mkdir -p extracted
           unzip -o "$ZIPFILE" -d extracted
+          echo "---- extracted contents ----"
+          find extracted -maxdepth 2
+
+      - name: Locate project root
+        id: locate
+        run: |
+          # Find the directory (at any depth under extracted/) that contains a build.gradle.kts or build.gradle,
+          # i.e. the actual Android project root, regardless of what the zip's top-level folder is named.
+          PROJECT_DIR=$(find extracted -maxdepth 3 -type f \( -name "build.gradle.kts" -o -name "build.gradle" \) -not -path "*/app/*" | head -n 1 | xargs -r dirname)
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "Could not locate project root (no top-level build.gradle[.kts] found)"
+            find extracted -maxdepth 4
+            exit 1
+          fi
+          echo "Project dir: $PROJECT_DIR"
+          echo "project_dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -30,14 +47,17 @@ jobs:
           gradle-version: 8.7
 
       - name: Build debug APK
-        working-directory: extracted/ConfirmSignalApp
+        working-directory: ${{ steps.locate.outputs.project_dir }}
         run: gradle assembleDebug --no-daemon
 
       - name: Rename APK
-        run: mv extracted/ConfirmSignalApp/app/build/outputs/apk/debug/app-debug.apk extracted/ConfirmSignalApp/app/build/outputs/apk/debug/Daily-Signal.apk
+        run: |
+          PROJECT_DIR="${{ steps.locate.outputs.project_dir }}"
+          mv "$PROJECT_DIR/app/build/outputs/apk/debug/app-debug.apk" "$PROJECT_DIR/app/build/outputs/apk/debug/Daily-Signal.apk"
+          echo "apk_path=$PROJECT_DIR/app/build/outputs/apk/debug/Daily-Signal.apk" >> "$GITHUB_ENV"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: Daily-Signal
-          path: extracted/ConfirmSignalApp/app/build/outputs/apk/debug/Daily-Signal.apk
+          path: ${{ env.apk_path }}
